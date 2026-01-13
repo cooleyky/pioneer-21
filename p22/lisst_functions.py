@@ -20,10 +20,10 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import xarray as xr
 
-from plotting_functions import addintervals2axes, addprofile2axes
+from p22.plotting_functions import addprofile2axes
 
 # Base url for data on Raw Data Archive
-RDA_BASE_URL = f"https://rawdata.oceanobservatories.org/files/cruise_data/Pioneer-MAB/{cruise_folder}/LISST/"
+# RDA_BASE_URL = f"https://rawdata.oceanobservatories.org/files/cruise_data/Pioneer-MAB/{cruise_folder}/LISST/"
 
 # General LISST data download and parsing into dataset
 # Version 25 Aug 2025: Retain integer pandas index as
@@ -92,6 +92,7 @@ def scrape_lisst_list(text):
             if (filenext is True)&(".CSV" in x):
                 # print(x)
                 file = x.replace("    ", "")[:-1]
+                file = x.replace("\t", "")[:-1]
                 castfiles[cast] = file
                 filenext = False
             else:
@@ -155,3 +156,33 @@ def plot_lisst_interval(lisst_casts, color, current_axes, datalabel=None):
         else:
             current_axes = addintervals2axes(current_axes, lisst_ds, color)
     return current_axes
+
+
+def addintervals2axes(ax, data, color, datalabel=None):
+    sample_interval = time_to_next_sample(data)
+    irregular_intervals = find_irregular_dt(sample_interval, 2)
+    if irregular_intervals:
+        print(data.cast)
+    # print(sample_interval.shape)
+    # print(data["sample_number"][0:-3].shape)
+    ax.scatter(data["sample_number"][:-1], sample_interval,
+             c=color, label=datalabel, edgecolors="none")
+    return ax
+
+
+def load_ctd_ascii(ctd_path, aschdr):
+    # Define path to data
+    # CTD_PATH = f"D:/general*/AR87a_CTD_Casts/ctd/process/*_{castnum}.asc"
+    # Load transmissometer data
+    for f in glob.glob(ctd_path):
+        ctd_df = pd.read_csv(f, names=aschdr, sep=r"\s+", index_col=False,
+                                skiprows=1, encoding="ascii",
+                                encoding_errors="replace")
+        try: print(ctd_df.head(1))
+        except: print("No CTD cast data"); return
+    # Add CTD time vector for Dataframe coordinates
+    ctd_df.insert(0,"time", pd.to_datetime(ctd_df.TimeQ, utc=True, unit='s', origin='2000-01-01T00:00:00').values)
+    ctd_df.set_index("time", drop=True, inplace=True)
+    # Convert Dataframe to Xarray for easy manipulation
+    ctd_ds = xr.Dataset.from_dataframe(ctd_df)
+    return ctd_ds
